@@ -5,7 +5,7 @@
 #cd -
 #source /afs/cern.ch/sw/lcg/external/gcc/4.9/x86_64-slc6-gcc49-opt/setup.sh
 
-cd ../CMSSW_8_0_30/src
+cd ../CMSSW_10_5_0/src
 eval `scramv1 runtime -sh`
 cd -
 

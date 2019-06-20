@@ -155,9 +155,11 @@ int main(int argc, char** argv)
   StdHistoSet* genCutHistos = isData? NULL : new StdHistoSet("genCut",outFile);;
   StdHistoSet* recoGenMatchHistos = isData? NULL : new StdHistoSet("recoGenMatch",outFile);;
   StdHistoSet* recoHistos = new StdHistoSet("reco",outFile);
+  */
   
   TH1F* h1_nEvents = new TH1F("h1_nEvents",";;entries",11,0.,11.);
   
+  /*
   TH2F* h2_mu_pt2_vs_pt1_total = new TH2F("h2_mu_pt2_vs_pt1_total","",100,-0.5,99.5,100,-0.5,99.5);
   TH2F* h2_mu_pt2_vs_pt1_pass  = new TH2F("h2_mu_pt2_vs_pt1_pass", "",100,-0.5,99.5,100,-0.5,99.5);
   TH2F* h2_mu_cuts_pt2_vs_pt1_total = new TH2F("h2_mu_cuts_pt2_vs_pt1_total","",100,-0.5,99.5,100,-0.5,99.5);
@@ -168,6 +170,7 @@ int main(int argc, char** argv)
   
   TH1F* h1_reco_mu_gen_mu_DR = new TH1F("h1_reco_mu_gen_mu_DR","",10000,0.,10.);
   TH1F* h1_reco_mu_gen_mu_ptRatio = new TH1F("h1_reco_mu_gen_mu_ptRatio","",10000,0.,10.);
+  */
   
   std::vector<std::pair<std::string,int> > vec_triggerPass;
   
@@ -180,7 +183,6 @@ int main(int argc, char** argv)
   TH1F* h1_triggerEff_noCuts = new TH1F("h1_triggerEff_noCuts","",15,0.,15.);
   TH1F* h1_triggerEff_genCuts = new TH1F("h1_triggerEff_genCuts","",15,0.,15.);
   TH1F* h1_triggerEff_recoMuSelection = new TH1F("h1_triggerEff_recoMuSelection","",15,0.,15.);
-  */
   
   
   
@@ -263,13 +265,13 @@ int main(int argc, char** argv)
     float frac = r.Uniform(0.,1.);
     float weight = 1.;
     float puWeight = 1.;
-    if( !isData )
-    {
-      for(unsigned int jj = 0; jj < frac_PU.size()-1; ++jj)
-        if( frac >= frac_PU.at(jj) && frac < frac_PU.at(jj+1) )
-          puWeight = puReweighting.at(jj) -> GetPUWeight(treeVars.trueNumInteractions);
-      weight = puWeight * mcWeight;
-    }
+    // if( !isData )
+    // {
+    //   for(unsigned int jj = 0; jj < frac_PU.size()-1; ++jj)
+    //     if( frac >= frac_PU.at(jj) && frac < frac_PU.at(jj+1) )
+    //       puWeight = puReweighting.at(jj) -> GetPUWeight(treeVars.trueNumInteractions);
+    //   weight = puWeight * mcWeight;
+    // }
     
     
     ++nTriggerEvents_noCuts;
@@ -760,121 +762,6 @@ int main(int argc, char** argv)
     outTree.H_eta = reco_H.v.Eta();
     outTree.H_phi = reco_H.v.Phi();
     outTree.H_mass = reco_H.v.M();
-    
-    outTree.jets_all_n = jets_all_n;
-    outTree.jets_all_bTagL_n = jets_all_bTagL_n;
-    outTree.jets_all_bTagM_n = jets_all_bTagM_n;
-    outTree.jets_all_bTagT_n = jets_all_bTagT_n;
-    outTree.jets_cen_n = jets_cen_n;
-    outTree.jets_cen_bTagL_n = jets_cen_bTagL_n;
-    outTree.jets_cen_bTagM_n = jets_cen_bTagM_n;
-    outTree.jets_cen_bTagT_n = jets_cen_bTagT_n;
-    outTree.jets_fwd_n = jets_fwd_n;
-    outTree.jets_fwd_bTagL_n = jets_fwd_bTagL_n;
-    outTree.jets_fwd_bTagM_n = jets_fwd_bTagM_n;
-    outTree.jets_fwd_bTagT_n = jets_fwd_bTagT_n;
-    
-    TLorentzVector jet1_all;
-    if( jetId1_all >= 0 )
-    {
-      jet1_all.SetPtEtaPhiE(treeVars.jets_pt->at(jetId1_all),
-                            treeVars.jets_eta->at(jetId1_all),
-                            treeVars.jets_phi->at(jetId1_all),
-                            treeVars.jets_energy->at(jetId1_all));
-      outTree.jet1_all_pt      = treeVars.jets_pt->at(jetId1_all);
-      outTree.jet1_all_eta     = treeVars.jets_eta->at(jetId1_all);
-      outTree.jet1_all_phi     = treeVars.jets_phi->at(jetId1_all);
-      outTree.jet1_all_energy  = treeVars.jets_energy->at(jetId1_all);
-    }
-    else
-    {
-      outTree.jet1_all_pt      = -99.;
-      outTree.jet1_all_eta     = -99.;
-      outTree.jet1_all_phi     = -99.;
-      outTree.jet1_all_energy  = -99.;
-    }
-    TLorentzVector jet2_all;
-    if( jetId2_all >= 0 )
-    {
-      jet2_all.SetPtEtaPhiE(treeVars.jets_pt->at(jetId2_all),
-                            treeVars.jets_eta->at(jetId2_all),
-                            treeVars.jets_phi->at(jetId2_all),
-                            treeVars.jets_energy->at(jetId2_all));
-      outTree.jet2_all_pt      = treeVars.jets_pt->at(jetId2_all);
-      outTree.jet2_all_eta     = treeVars.jets_eta->at(jetId2_all);
-      outTree.jet2_all_phi     = treeVars.jets_phi->at(jetId2_all);
-      outTree.jet2_all_energy  = treeVars.jets_energy->at(jetId2_all);
-    }
-    else
-    {
-      outTree.jet2_all_pt      = -99.;
-      outTree.jet2_all_eta     = -99.;
-      outTree.jet2_all_phi     = -99.;
-      outTree.jet2_all_energy  = -99.;
-    }
-    if( jetId1_all >= 0 && jetId2_all >= 0 )
-    {
-      outTree.jet_all_Deta     = DeltaEta(treeVars.jets_eta->at(jetId1_all),treeVars.jets_eta->at(jetId2_all));
-      outTree.jet_all_Dphi     = DeltaPhi(treeVars.jets_phi->at(jetId1_all),treeVars.jets_phi->at(jetId2_all));
-      outTree.jet_all_mass     = (jet1_all+jet2_all).M();
-    }
-    else
-    {
-      outTree.jet_all_Deta     = -99.;
-      outTree.jet_all_Dphi     = -99.;
-      outTree.jet_all_mass     = -99.;
-    }
-    
-    TLorentzVector jet1_cen;
-    if( jetId1_cen >= 0 )
-    {
-      jet1_cen.SetPtEtaPhiE(treeVars.jets_pt->at(jetId1_cen),
-                            treeVars.jets_eta->at(jetId1_cen),
-                            treeVars.jets_phi->at(jetId1_cen),
-                            treeVars.jets_energy->at(jetId1_cen));
-      outTree.jet1_cen_pt      = treeVars.jets_pt->at(jetId1_cen);
-      outTree.jet1_cen_eta     = treeVars.jets_eta->at(jetId1_cen);
-      outTree.jet1_cen_phi     = treeVars.jets_phi->at(jetId1_cen);
-      outTree.jet1_cen_energy  = treeVars.jets_energy->at(jetId1_cen);
-    }
-    else
-    {
-      outTree.jet1_cen_pt      = -99.;
-      outTree.jet1_cen_eta     = -99.;
-      outTree.jet1_cen_phi     = -99.;
-      outTree.jet1_cen_energy  = -99.;
-    }
-    TLorentzVector jet2_cen;
-    if( jetId2_cen >= 0 )
-    {
-      jet2_cen.SetPtEtaPhiE(treeVars.jets_pt->at(jetId2_cen),
-                            treeVars.jets_eta->at(jetId2_cen),
-                            treeVars.jets_phi->at(jetId2_cen),
-                            treeVars.jets_energy->at(jetId2_cen));
-      outTree.jet2_cen_pt      = treeVars.jets_pt->at(jetId2_cen);
-      outTree.jet2_cen_eta     = treeVars.jets_eta->at(jetId2_cen);
-      outTree.jet2_cen_phi     = treeVars.jets_phi->at(jetId2_cen);
-      outTree.jet2_cen_energy  = treeVars.jets_energy->at(jetId2_cen);
-    }
-    else
-    {
-      outTree.jet2_cen_pt      = -99.;
-      outTree.jet2_cen_eta     = -99.;
-      outTree.jet2_cen_phi     = -99.;
-      outTree.jet2_cen_energy  = -99.;
-    }
-    if( jetId1_cen >= 0 && jetId2_cen >= 0 )
-    {
-      outTree.jet_cen_Deta     = DeltaEta(treeVars.jets_eta->at(jetId1_cen),treeVars.jets_eta->at(jetId2_cen));
-      outTree.jet_cen_Dphi     = DeltaPhi(treeVars.jets_phi->at(jetId1_cen),treeVars.jets_phi->at(jetId2_cen));
-      outTree.jet_cen_mass     = (jet1_cen+jet2_cen).M();
-    }
-    else
-    {
-      outTree.jet_cen_Deta     = -99.;
-      outTree.jet_cen_Dphi     = -99.;
-      outTree.jet_cen_mass     = -99.;
-    }
     
     outTree.met_pt = treeVars.met_pt;
     outTree.met_phi = treeVars.met_phi;
