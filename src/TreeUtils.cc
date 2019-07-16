@@ -4,6 +4,8 @@
 
 void InitTreeVars(TChain* chain_reco, TChain* chain_gen, TreeVars& treeVars)
 {
+  treeVars.genPho_HardProcFinState = new std::vector<int>;
+  treeVars.genPho_isPromptFinState = new std::vector<int>;
   treeVars.reso_pt = new std::vector<float>;
   treeVars.reso_eta = new std::vector<float>;
   treeVars.reso_phi = new std::vector<float>;
@@ -105,6 +107,8 @@ void InitTreeVars(TChain* chain_reco, TChain* chain_gen, TreeVars& treeVars)
   if( chain_gen != NULL )
   {
     chain_gen -> SetBranchStatus("reso_pt",    1); chain_gen -> SetBranchAddress("reso_pt",    &treeVars.reso_pt);
+    chain_gen -> SetBranchStatus("genPho_HardProcFinState",    1); chain_gen -> SetBranchAddress("genPho_HardProcFinState",    &treeVars.genPho_HardProcFinState);
+    chain_gen -> SetBranchStatus("genPho_isPromptFinState",    1); chain_gen -> SetBranchAddress("genPho_isPromptFinState",    &treeVars.genPho_isPromptFinState);
     chain_gen -> SetBranchStatus("reso_eta",   1); chain_gen -> SetBranchAddress("reso_eta",   &treeVars.reso_eta);
     chain_gen -> SetBranchStatus("reso_phi",   1); chain_gen -> SetBranchAddress("reso_phi",   &treeVars.reso_phi);
     chain_gen -> SetBranchStatus("reso_energy",1); chain_gen -> SetBranchAddress("reso_energy",&treeVars.reso_energy);

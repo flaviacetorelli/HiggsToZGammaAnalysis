@@ -12,6 +12,8 @@
 /*** tree variables ***/
 struct TreeVars
 {
+  std::vector<int>* genPho_HardProcFinState;
+  std::vector<int>* genPho_isPromptFinState;
   std::vector<float>* reso_pt;
   std::vector<float>* reso_eta;
   std::vector<float>* reso_phi;

@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
 
 	TString MuonFold = "/afs/cern.ch/work/f/fcetorel/private/work2/HtogZ/HiggsToZGammaAnalysis/plots/mu/new/";
 
-	TString EleFold = "/eos/user/f/fcetorel/HtoZg/ele/ntuple";
+	TString EleFold = "/afs/cern.ch/work/f/fcetorel/private/work2/HtogZ/HiggsToZGammaAnalysis/plots/ele/new/";
 
 	vector<TString> names = {"plots_mc_ttH", "plots_mc_ggH", "plots_mc_VBF", "plots_mc_WplusH","plots_mc_WminusH","plots_mc_ZH", "plots_mc_Zgamma", "plots_mc_DY", "plots_data"};
 
@@ -114,20 +114,20 @@ int main(int argc, char *argv[])
 
 	else
 	{	cout << "Processing electron tag" << endl;
-		ttH = new TChain("out_tree");
-		ttH -> Add(EleFold + names[0] + ".root");		
-		ggH = new TChain("out_tree");
-		ggH -> Add(EleFold + names[1] + ".root");		
-		vbf = new TChain("out_tree");
-		vbf -> Add(EleFold + names[2] + ".root");		
-		wph = new TChain("out_tree");
-		wph -> Add(EleFold + names[3] + ".root");	
-		wmh = new TChain("out_tree");
-		wmh -> Add(EleFold + names[4] + ".root");		
-		zh = new TChain("out_tree");
-		zh -> Add(EleFold + names[5] + ".root");
+		ttH = new TChain("outTree");
+		ttH -> Add(EleFold + names[0] + "*.root");		
+		ggH = new TChain("outTree");
+		ggH -> Add(EleFold + names[1] + "*.root");		
+		vbf = new TChain("outTree");
+		vbf -> Add(EleFold + names[2] + "*.root");		
+		wph = new TChain("outTree");
+		wph -> Add(EleFold + names[3] + "*.root");	
+		wmh = new TChain("outTree");
+		wmh -> Add(EleFold + names[4] + "*.root");		
+		zh = new TChain("outTree");
+		zh -> Add(EleFold + names[5] + "*.root");
 
-
+/*
 		data = new TChain("out_tree");
 		data -> Add(EleFold + names[8] + "*.root");
 		
@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
 		Zgamma -> Add(EleFold + names[6] + ".root");
 				
 		DY = new TChain("out_tree");
-		DY -> Add(EleFold + names[7] + ".root");		
+		DY -> Add(EleFold + names[7] + ".root");	*/	
 
 	}
 
@@ -149,14 +149,17 @@ int main(int argc, char *argv[])
 
 	
 	float H_mass = 0.;
+	float ele1_pt = 0.;
+	float mu3_pt = 0.;
 
 
 
 	
 	TH1F* H_mass_histo[nhisto][7];
+	TH1F* H_mass_tot_histo;
 
 
-
+	H_mass_tot_histo = new TH1F("H_mass_histo_tot", "; Invariant mass H (GeV); Counts", 80, 100, 180 );
 
 	for(int i=0; i<6; i++)
 	{	
@@ -229,6 +232,8 @@ int main(int argc, char *argv[])
 
 		serviceTree -> SetBranchAddress("weight_MC", &weight_MC);
 		serviceTree -> SetBranchAddress("cat_n", &cat_n);
+		serviceTree -> SetBranchAddress("ele1_pt", &ele1_pt);
+		serviceTree -> SetBranchAddress("mu3_pt", &mu3_pt);
 
 
 		serviceTree -> SetBranchAddress("H_mass", &H_mass);
@@ -244,10 +249,11 @@ int main(int argc, char *argv[])
 
 			if(i%10000==0) cout << "Processing tag " << names[n] << ", event " << i << " out of " << nentries << "\r" << flush;			
 			
-			if (H_mass < 115 && H_mass > 170)  continue;
+			if (H_mass < 100 || H_mass > 180)  continue;
+			if (cat_n == 6 && ele1_pt != -100) continue; 
 			
-			
-			H_mass_histo[n][cat_n] -> Fill(H_mass, weight_MC);
+			H_mass_histo[n][cat_n-1] -> Fill(H_mass, weight_MC*lumiFactor);
+			H_mass_tot_histo -> Fill(H_mass, weight_MC*lumiFactor);
 
 
 
@@ -271,11 +277,12 @@ int main(int argc, char *argv[])
 			float nevents_sigma; 
 			float min = H_mass_histo[i][j]->FindBin(ret[2]);
 			float max = H_mass_histo[i][j]->FindBin(ret[3]);
-			nevents_sigma = H_mass_histo[i][j]-> Integral(min,max);
-			cout << nevents_sigma << endl; 
+			nevents_sigma = H_mass_histo[i][j]-> Integral();
+			cout << nevents_sigma*0.683 << endl; 
 		}
 	}
-
+			float nevents_sigma = H_mass_tot_histo-> Integral();
+			cout << "totale  " << nevents_sigma*0.683 << endl;
 
 	if(isMuon)
 	{	system("mv *.png /eos/user/f/fcetorel/www/Plot_Zgamma/muon/");

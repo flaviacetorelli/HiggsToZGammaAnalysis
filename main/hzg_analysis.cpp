@@ -99,6 +99,8 @@ int main(int argc, char** argv)
   
   int doMuon = opts.GetOpt<int>("Cuts.doMuon");
   int doEle = opts.GetOpt<int>("Cuts.doEle");
+  int doFilter = opts.GetOpt<int>("Cuts.doFilter");
+  int doTrigEff = opts.GetOpt<int>("Cuts.doTrigEff");
 
   float reco_ptMin1_mu = opts.GetOpt<float>("Cuts.reco_ptMin1_mu");
   float reco_ptMin2_mu = opts.GetOpt<float>("Cuts.reco_ptMin2_mu");
@@ -199,13 +201,16 @@ int main(int argc, char** argv)
   
   int nTriggerEvents_noCuts = 0;
   int nTriggerEvents_genCuts = 0;
-  int nTriggerEvents_recoMuSelection = 0;
+  int nTriggerEvents_recoLepSelection = 0;
+  int nTriggerEvents_AllSelection = 0;
   std::vector<std::pair<std::string,int> > vec_triggerPass_noCuts;
   std::vector<std::pair<std::string,int> > vec_triggerPass_genCuts;
-  std::vector<std::pair<std::string,int> > vec_triggerPass_recoMuSelection;
+  std::vector<std::pair<std::string,int> > vec_triggerPass_recoLepSelection;
+  std::vector<std::pair<std::string,int> > vec_triggerPass_AllSelection;
   TH1F* h1_triggerEff_noCuts = new TH1F("h1_triggerEff_noCuts","",15,0.,15.);
   TH1F* h1_triggerEff_genCuts = new TH1F("h1_triggerEff_genCuts","",15,0.,15.);
-  TH1F* h1_triggerEff_recoMuSelection = new TH1F("h1_triggerEff_recoMuSelection","",15,0.,15.);
+  TH1F* h1_triggerEff_recoLepSelection = new TH1F("h1_triggerEff_recoLepSelection","",15,0.,15.);
+  TH1F* h1_triggerEff_AllSelection = new TH1F("h1_triggerEff_AllSelection","",15,0.,15.);
   
   
   
@@ -264,7 +269,11 @@ int main(int argc, char** argv)
   //------------------------------
   //--- muon Rochester corrections
   // RoccoR rc("data/rcdata.2016.v3");
-  
+      int no_sel=0; 
+    int lep_sel=0; 
+    int Z_sel=0; 
+    int gamma_sel=0; 
+    int H_sel=0; 
   
   
   //--------------------
@@ -276,7 +285,7 @@ int main(int argc, char** argv)
   int nEvents_selected_recoGenMatch = 0;
   
   //for(int entry = 0; entry < 1000; ++entry)
-    for(int entry = 0; entry < chain_reco->GetEntries(); ++entry)
+  for(int entry = 0; entry < chain_reco->GetEntries(); ++entry)
   {
     if( !debugMode && entry%100 == 0 ) std::cout << ">>> loop 1/1: reading entry " << entry << " / " << nEntries_recoTree << "\r" << std::flush;
     if(  debugMode && entry%1 == 0 ) std::cout << ">>> loop 1/1: reading entry " << entry << " / " << nEntries_recoTree << std::endl;
@@ -581,13 +590,16 @@ int main(int argc, char** argv)
     
     //---------------------
     //--- select reco muons
+
     if (doMuon)
     {
       if( debugMode ) std::cout << ">>>>>> start reco mu selection" << std::endl;
     
       if( temp_gamma.size() < 1 ) continue;
       if( temp_mu.size() < 2 ) continue;
-    
+      no_sel++; 
+
+
       float mu1_DR;
       float mu1_iso;
       for(unsigned int ii = 0; ii < temp_mu.size(); ++ii)
@@ -626,11 +638,23 @@ int main(int argc, char** argv)
         break;
       }
       if( reco_mu.size() < 2 ) continue;
-      
+      lep_sel++; 
+
+
+
       reco_Z.v = reco_mu.at(0).v + reco_mu.at(1).v;
       reco_Z.charge = reco_mu.at(0).charge + reco_mu.at(1).charge; 
       if ( reco_Z.v.M() < 50 ) continue;
+      Z_sel++;  
 
+    ++nTriggerEvents_recoLepSelection;
+    for(unsigned int ii = 0; ii < treeVars.trgs_name->size(); ++ii)
+    {
+      std::pair<std::string,int> p(treeVars.trgs_name->at(ii),treeVars.trgs_pass->at(ii));
+      std::vector<std::pair<std::string,int> >::iterator it = std::find_if(vec_triggerPass_recoLepSelection.begin(),vec_triggerPass_recoLepSelection.end(),FindPair(treeVars.trgs_name->at(ii)));
+      if( it != vec_triggerPass_recoLepSelection.end() ) it->second += treeVars.trgs_pass->at(ii);
+      else vec_triggerPass_recoLepSelection.push_back( p );
+    }
     
       for(unsigned int ii = 0; ii < temp_gamma.size(); ++ii)
       {
@@ -652,16 +676,39 @@ int main(int argc, char** argv)
       }
 
       if( reco_gamma.size() < 1 ) continue;
+      gamma_sel++; 
+	
+
+
+      //--------Filter for overlap removal
+      bool skipEvent=false;
+      if (doFilter)
+      {
+        if ((treeVars.genPho_HardProcFinState->size()> reco_gamma.at(0).it) && (treeVars.genPho_isPromptFinState->size()> reco_gamma.at(0).it) &&
+            (treeVars.genPho_isPromptFinState->at(reco_gamma.at(0).it) || treeVars.genPho_HardProcFinState->at(reco_gamma.at(0).it))) skipEvent=true;
+
+      }
+      if (doFilter && skipEvent) continue;
+
+
 
       reco_H.v = reco_mu.at(0).v + reco_mu.at(1).v + reco_gamma.at(0).v;
       reco_H.charge = reco_mu.at(0).charge + reco_mu.at(1).charge; 
       reco_H.pdgId = 25;
+      if (reco_H.v.M() < 100 || reco_H.v.M() > 180 ) continue;
       if ( ((reco_gamma.at(0).v.Pt()) /(reco_H.v.M())) < reco_pToM_gamma ) continue;
       if ((reco_H.v + reco_Z.v).M() < reco_sumM ) continue;
-
+      H_sel++; 
       if( debugMode ) std::cout << ">>>>>> end reco mu selection" << std::endl;
     		
-
+    ++nTriggerEvents_AllSelection;
+    for(unsigned int ii = 0; ii < treeVars.trgs_name->size(); ++ii)
+    {
+      std::pair<std::string,int> p(treeVars.trgs_name->at(ii),treeVars.trgs_pass->at(ii));
+      std::vector<std::pair<std::string,int> >::iterator it = std::find_if(vec_triggerPass_AllSelection.begin(),vec_triggerPass_AllSelection.end(),FindPair(treeVars.trgs_name->at(ii)));
+      if( it != vec_triggerPass_AllSelection.end() ) it->second += treeVars.trgs_pass->at(ii);
+      else vec_triggerPass_AllSelection.push_back( p );
+    }
       
       //save a third lepton if present
       if( debugMode ) std::cout << ">>>>>> start third lepton" << std::endl;
@@ -714,9 +761,9 @@ int main(int argc, char** argv)
           std::cout << "terzo ele candidate pT " << temp_ele.at(ii).v.Pt()  <<  std::endl;
           std::cout << "terzo ele candidate eta " << temp_ele.at(ii).v.Eta()  <<  std::endl;
           std::cout << "terzo ele ID MVA  " << treeVars.electrons_MVAID->at(temp_ele.at(ii).it)  <<  std::endl;
-          std::cout << "DR photon   " <<  DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi())<<  std::endl;
-          std::cout << "DR electron 1  " <<DeltaR(reco_mu.at(0).v.Eta(),reco_mu.at(0).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi()) << std::endl;
-          std::cout << "DR electron 2 " <<DeltaR(reco_mu.at(1).v.Eta(),reco_mu.at(1).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi()) << std::endl;
+          std::cout << "DR photon   " <<  DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi())<<  std::endl;
+          std::cout << "DR electron 1  " <<DeltaR(reco_mu.at(0).v.Eta(),reco_mu.at(0).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi()) << std::endl;
+          std::cout << "DR electron 2 " <<DeltaR(reco_mu.at(1).v.Eta(),reco_mu.at(1).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi()) << std::endl;
 	  std::cout << "reco_ele.size()  "   << reco_ele.size() << std::endl;
         }
        
@@ -832,6 +879,11 @@ int main(int argc, char** argv)
         if( DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_mu.at(jj).v.Eta(),reco_mu.at(jj).v.Phi()) < 0.4 ) skipJet = true;
       	}
         if( DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi()) < 0.4 ) continue;
+	if(reco_ele.size()>0)
+        {
+          if (DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi())<0.4 ) skipJet = true;
+    
+        }
       
       if( skipJet ) continue;
 
@@ -867,7 +919,11 @@ int main(int argc, char** argv)
         if( DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_mu.at(jj).v.Eta(),reco_mu.at(jj).v.Phi()) < 0.4 ) skipJet = true;
       	}
         if( DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi()) < 0.4 ) continue;
-
+	if(reco_ele.size()>0)
+        {
+          if (DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi())<0.4 ) skipJet = true;
+    
+        }
 
 
         
@@ -896,34 +952,25 @@ int main(int argc, char** argv)
 
 
 
+//std::cout << "-------sono arrivato alle categorie--------" << std::endl; 
 
-
-
-
-
-
-
-
-    
+ 
 // --- categories
 	int cat_n; 
 	bool isCat = false;
 	if (reco_ele.size()>0 || reco_mu.size() >2)  //leptons
 	{
-          if( reco_mu.size() >2 && reco_jets.size() == 2 &&
-              (DeltaR(reco_jets.at(0).v.Eta(),reco_jets.at(0).v.Phi(),reco_mu.at(2).v.Eta(),reco_mu.at(2).v.Phi()) < 0.4 ||
-               DeltaR(reco_jets.at(1).v.Eta(),reco_jets.at(1).v.Phi(),reco_mu.at(2).v.Eta(),reco_mu.at(2).v.Phi()) < 0.4 ) ) continue; 
-          if( reco_ele.size() >0 && reco_jets.size() == 2 &&
-              (DeltaR(reco_jets.at(0).v.Eta(),reco_jets.at(0).v.Phi(),reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi()) < 0.4 ||
-               DeltaR(reco_jets.at(1).v.Eta(),reco_jets.at(1).v.Phi(),reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi()) < 0.4 ) ) continue; 
-          cat_n = 6 ; 
-          isCat = true; 
 
+          cat_n = 6 ; 
+	  //std::cout << "sono nella categoria "<< cat_n << "quindi ele " << reco_ele.size() << " e mu " << reco_mu.size() <<std::endl; 
+          isCat = true; 
          }
 
 	if (!isCat && reco_jets.size() == 2) //dijets
 	{
+
           cat_n = 5 ; 
+	  //std::cout << "sono nella categoria "<< cat_n << "quindi jets " << reco_jets.size() <<std::endl; 
           isCat = true; 
 
          }
@@ -931,6 +978,7 @@ int main(int argc, char** argv)
 	{
           cat_n = 7; 
           isCat = true; 
+	 // std::cout << "sono nella categoria "<< cat_n << "quindi H pt " << reco_H.v.Pt()  <<std::endl; 
 
          }
 
@@ -943,12 +991,14 @@ int main(int argc, char** argv)
             if (treeVars.photons_full5x5_R9-> at(reco_gamma.at(0).it) > 0.94) 
             {
               cat_n = 1 ;
+	  //std::cout << "sono nella categoria "<< cat_n  <<std::endl; 
               isCat = true; 
             }
           
 	    else 
             {
               cat_n = 2;
+	  //std::cout << "sono nella categoria "<< cat_n  <<std::endl; 
               isCat = true; 
             }
           }
@@ -958,6 +1008,7 @@ int main(int argc, char** argv)
                   ((fabs(reco_mu.at(0).v.Eta()) > 2.1 && fabs(reco_mu.at(0).v.Eta()) < 2.4)||(fabs(reco_mu.at(1).v.Eta())>2.1 && fabs(reco_mu.at(1).v.Eta())< 2.4)))
           {
             cat_n = 3; 
+	  //std::cout << "sono nella categoria "<< cat_n  <<std::endl; 
             isCat = true; 
           }
         }
@@ -967,6 +1018,7 @@ int main(int argc, char** argv)
             (fabs(reco_mu.at(1).v.Eta()) > 0 && fabs(reco_mu.at(1).v.Eta()) < 2.4 )) )
         {
           cat_n = 4 ;
+	  //std::cout << "sono nella categoria "<< cat_n  <<std::endl; 
           isCat = true; 
         }
 
@@ -1031,7 +1083,22 @@ int main(int argc, char** argv)
       outTree.mu3_isL = treeVars.muons_isLoose->at(reco_mu.at(2).it);
       outTree.mu3_isM = treeVars.muons_isMedium->at(reco_mu.at(2).it);
       outTree.mu3_isT = treeVars.muons_isTight->at(reco_mu.at(2).it);
+
       }
+      else
+      {
+      outTree.mu3_pt = -100.;
+      outTree.mu3_eta = -100.;
+      outTree.mu3_phi = -100.;
+      outTree.mu3_dxy = -100.;
+      outTree.mu3_dxyPull = -100.;
+      outTree.mu3_dz = -100.;
+      outTree.mu3_dzPull = -100.;
+      outTree.mu3_relIso = -100.;
+      outTree.mu3_isL = -100.;
+      outTree.mu3_isM = -100.;
+      outTree.mu3_isT = -100.;
+       }
 
 
      if (reco_ele.size() >0 )
@@ -1047,18 +1114,29 @@ int main(int argc, char** argv)
       outTree.ele1_full5x5_R9 = treeVars.electrons_full5x5_R9->at(reco_ele.at(0).it);
       outTree.ele1_full5x5_sieie = treeVars.electrons_full5x5_sieie->at(reco_ele.at(0).it);
       }
+      else
+      {
+       outTree.ele1_pt = -100;
+       outTree.ele1_eta = -100;
+       outTree.ele1_phi = -100;
+      //outTree.ele1_dxy = treeVars.electrons_dxy->at(reco_ele.at(0).it);
+      //outTree.ele1_dxyPull = fabs(treeVars.electrons_dxy->at(reco_ele.at(0).it))/treeVars.electrons_dxyErr->at(reco_ele.at(0).it);
+      //outTree.ele1_dz = treeVars.electrons_dz->at(reco_ele.at(0).it);
+      //outTree.ele1_dzPull = fabs(treeVars.electrons_dz->at(reco_ele.at(0).it))/treeVars.electrons_dzErr->at(reco_ele.at(0).it);
+        outTree.ele1_IDMVA = -100;
+      outTree.ele1_full5x5_R9 = -100;
+      outTree.ele1_full5x5_sieie = -100;
 
+       }
 
-     if (reco_jets.size() == 2 )
-     {
-       outTree.jet1_pt = reco_jets.at(0).v.Pt();
-       outTree.jet1_eta = reco_jets.at(0).v.Eta();
-       outTree.jet1_phi = reco_jets.at(0).v.Phi();
-       outTree.jet2_pt = reco_jets.at(1).v.Pt();
-       outTree.jet2_eta = reco_jets.at(1).v.Eta();
-       outTree.jet2_phi = reco_jets.at(1).v.Phi();
+outTree.jet1_pt = (reco_jets.size()==2 ? reco_jets.at(0).v.Pt() : -100);
+outTree.jet1_eta = (reco_jets.size()==2 ? reco_jets.at(0).v.Eta() : -100);
+outTree.jet1_phi = (reco_jets.size()==2 ? reco_jets.at(0).v.Phi() : -100);
+outTree.jet2_pt = (reco_jets.size()==2 ? reco_jets.at(1).v.Pt() : -100);
+outTree.jet2_eta = (reco_jets.size()==2 ? reco_jets.at(1).v.Eta() : -100);
+outTree.jet2_phi = (reco_jets.size()==2 ? reco_jets.at(1).v.Phi() : -100);
+     
 
-      }
 
      
       outTree.Z_pt = reco_Z.v.Pt();
@@ -1118,6 +1196,7 @@ int main(int argc, char** argv)
     
       if( temp_gamma.size() < 1 ) continue;
       if( temp_ele.size() < 2 ) continue;
+      no_sel++;
 
 
       float ele1_DR;
@@ -1154,14 +1233,24 @@ int main(int argc, char** argv)
         break;
       }
       if( reco_ele.size() < 2 ) continue;
+       lep_sel++;
 
 
       reco_Z.v = reco_ele.at(0).v + reco_ele.at(1).v;
       reco_Z.charge = reco_ele.at(0).charge + reco_ele.at(1).charge; 
       if ( reco_Z.v.M() < 50 ) continue;
-
-
-      
+      Z_sel++;
+   
+  //Trigger eff after leptons selections
+ ++nTriggerEvents_recoLepSelection;
+    for(unsigned int ii = 0; ii < treeVars.trgs_name->size(); ++ii)
+    {
+      std::pair<std::string,int> p(treeVars.trgs_name->at(ii),treeVars.trgs_pass->at(ii));
+      std::vector<std::pair<std::string,int> >::iterator it = std::find_if(vec_triggerPass_recoLepSelection.begin(),vec_triggerPass_recoLepSelection.end(),FindPair(treeVars.trgs_name->at(ii)));
+      if( it != vec_triggerPass_recoLepSelection.end() ) it->second += treeVars.trgs_pass->at(ii);
+      else vec_triggerPass_recoLepSelection.push_back( p );
+    }
+  // --------------------------------
       for(unsigned int ii = 0; ii < temp_gamma.size(); ++ii)
       {
         if(temp_gamma.at(ii).v.Pt() < reco_ptMin_gamma) continue; 
@@ -1179,65 +1268,135 @@ int main(int argc, char** argv)
       }
 
       if( reco_gamma.size() < 1 ) continue;
+      gamma_sel++; 
+	
+
+
+      //--------Filter for overlap removal
+      bool skipEvent=false;
+      if (doFilter)
+      {
+        if ((treeVars.genPho_HardProcFinState->size()> reco_gamma.at(0).it) && (treeVars.genPho_isPromptFinState->size()> reco_gamma.at(0).it) &&
+            (treeVars.genPho_isPromptFinState->at(reco_gamma.at(0).it) || treeVars.genPho_HardProcFinState->at(reco_gamma.at(0).it))) skipEvent=true;
+
+      }
+      if (doFilter && skipEvent) continue;
+
 
       reco_H.v = reco_ele.at(0).v + reco_ele.at(1).v + reco_gamma.at(0).v;
       reco_H.charge = reco_ele.at(0).charge + reco_ele.at(1).charge; 
       reco_H.pdgId = 25;
       if ( ((reco_gamma.at(0).v.Pt()) /(reco_H.v.M())) < reco_pToM_gamma ) continue;
+      if (reco_H.v.M() < 100 || reco_H.v.M() > 180 ) continue;
       if ((reco_H.v + reco_Z.v).M() < reco_sumM ) continue;
-
+      H_sel++;
       if( debugMode ) std::cout << ">>>>>> end reco ele selection" << std::endl;
-      
-    //-------------------save a third lepton if present
+
+  //Trigger eff after All selections
+    ++nTriggerEvents_AllSelection;
+    for(unsigned int ii = 0; ii < treeVars.trgs_name->size(); ++ii)
+    {
+      std::pair<std::string,int> p(treeVars.trgs_name->at(ii),treeVars.trgs_pass->at(ii));
+      std::vector<std::pair<std::string,int> >::iterator it = std::find_if(vec_triggerPass_AllSelection.begin(),vec_triggerPass_AllSelection.end(),FindPair(treeVars.trgs_name->at(ii)));
+      if( it != vec_triggerPass_AllSelection.end() ) it->second += treeVars.trgs_pass->at(ii);
+      else vec_triggerPass_AllSelection.push_back( p );
+    }
+    //--------------------------------
+
+ //save a third lepton if present
       if( debugMode ) std::cout << ">>>>>> start third lepton" << std::endl;
 
-	float ele3_DR; 
-
-      for(unsigned int ii = 0; ii < temp_ele.size(); ++ii)
-      {
-	if (int(ii)==reco_ele.at(0).it || int(ii)==reco_ele.at(1).it) continue;
-        if( temp_ele.at(ii).v.Pt() < 7) continue;
-        if( fabs(temp_ele.at(ii).v.Eta()) > reco_eta_ele ) continue;
-      	if (treeVars.electrons_MVAID->at(temp_ele.at(ii).it) < reco_ID_ele) continue;
-        if( fabs(treeVars.electrons_dxy->at(temp_ele.at(ii).it)) > 0.05 ) continue;
-        if( fabs(treeVars.electrons_dz->at(temp_ele.at(ii).it))  > 0.10 ) continue;
-        
-        ele3_DR = DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi());
-	if (ele3_DR < reco_DR_lep) continue;
-        reco_ele.push_back( temp_ele.at(ii) );
-        break;
-      }      
       float mu1_iso;
-      float mu1_DR;
+      
       for(unsigned int ii = 0; ii < temp_mu.size(); ++ii) 
+
       {
+        mu1_iso = treeVars.muons_pfIsoChargedHadron->at(temp_mu.at(ii).it) +
+        std::max(0.,treeVars.muons_pfIsoNeutralHadron->at(temp_mu.at(ii).it)+treeVars.muons_pfIsoPhoton->at(temp_mu.at(ii).it)-0.5*treeVars.muons_pfIsoPU->at(temp_mu.at(ii).it));
+        if( debugMode ) 
+          {
+          std::cout << "reco_mu_n  " << reco_mu.at(0).it << "  e  " << reco_mu.at(1).it << std::endl;
+          std::cout << "terzo mu candidate  " << temp_mu.at(ii).it <<  std::endl;
+          std::cout << "terzo mu candidate pT " << temp_mu.at(ii).v.Pt()  <<  std::endl;
+          std::cout << "terzo mu is Tight? " << treeVars.muons_isTight->at(temp_mu.at(ii).it) <<  std::endl;
+          std::cout << "terzo mu eta " << temp_mu.at(ii).v.Eta() <<  std::endl;
+          std::cout << "terzo mu iso/pT   " << mu1_iso/temp_mu.at(ii).v.Pt() <<  std::endl;
+          std::cout << "DR photon   " <<  DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi())<<  std::endl;
+          std::cout << "DR electron 1  " <<DeltaR(reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi()) << std::endl;
+          std::cout << "DR electron 2 " <<DeltaR(reco_ele.at(1).v.Eta(),reco_ele.at(1).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi()) << std::endl;
+          std::cout << "reco_mu.size()  "   << reco_mu.size() << std::endl;
+          }
+
 
         if( temp_mu.at(ii).v.Pt() < 5 ) continue;
         if( treeVars.muons_isTight->at(temp_mu.at(ii).it) != 1 ) continue;
         if( fabs(temp_mu.at(ii).v.Eta()) > reco_eta_mu ) continue;
         if( fabs(treeVars.muons_dxy->at(temp_mu.at(ii).it)) > 0.05 ) continue;
         if( fabs(treeVars.muons_dz->at(temp_mu.at(ii).it))  > 0.10 ) continue;
-      
-        mu1_iso = treeVars.muons_pfIsoChargedHadron->at(temp_mu.at(ii).it) +
-        std::max(0.,treeVars.muons_pfIsoNeutralHadron->at(temp_mu.at(ii).it)+treeVars.muons_pfIsoPhoton->at(temp_mu.at(ii).it)-0.5*treeVars.muons_pfIsoPU->at(temp_mu.at(ii).it));
-        
-        if( mu1_iso/temp_mu.at(ii).v.Pt()> 0.35) continue;
-        mu1_DR = DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi());
-        if (mu1_DR < reco_DR_lep) continue;
+        if( mu1_iso/temp_mu.at(ii).v.Pt() > 0.35 ) continue;
+        if (DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi()) < reco_DR_lep) continue;
+        if (DeltaR(reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi()) < reco_DR_lep) continue;
+        if (DeltaR(reco_ele.at(1).v.Eta(),reco_ele.at(1).v.Phi(),temp_mu.at(ii).v.Eta(),temp_mu.at(ii).v.Phi()) < reco_DR_lep) continue;
+    
         reco_mu.push_back( temp_mu.at(ii) );
+	if( debugMode ) std::cout << "IS PASSED --------------------- !!!!!! ----------- so mu size "   << reco_mu.size() << std::endl;
+
         break;
        }
 
-    //-----
+      for(unsigned int ii = 0; ii < temp_ele.size(); ++ii)
+      {
+	if (int(ii)==reco_ele.at(0).it || int(ii)==reco_ele.at(1).it) continue;
+        if( temp_ele.at(ii).v.Pt() < 7) continue;
+        if( debugMode ) 
+        {
+
+          std::cout << "terzo ele candidate pT " << temp_ele.at(ii).v.Pt()  <<  std::endl;
+          std::cout << "terzo ele candidate eta " << temp_ele.at(ii).v.Eta()  <<  std::endl;
+          std::cout << "terzo ele ID MVA  " << treeVars.electrons_MVAID->at(temp_ele.at(ii).it)  <<  std::endl;
+          std::cout << "DR photon   " <<  DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi())<<  std::endl;
+          std::cout << "DR electron 1  " <<DeltaR(reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi()) << std::endl;
+          std::cout << "DR electron 2 " <<DeltaR(reco_ele.at(1).v.Eta(),reco_ele.at(1).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi()) << std::endl;
+	  std::cout << "reco_ele.size()  "   << reco_ele.size() << std::endl;
+        }
+       
+
+        if( fabs(temp_ele.at(ii).v.Eta()) > reco_eta_ele ) continue;
+      	if (treeVars.electrons_MVAID->at(temp_ele.at(ii).it) < reco_ID_ele) continue;
+        if( fabs(treeVars.electrons_dxy->at(temp_ele.at(ii).it)) > 0.05 ) continue;
+        if( fabs(treeVars.electrons_dz->at(temp_ele.at(ii).it))  > 0.10 ) continue;
+
+        if ( DeltaR(reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi()) < reco_DR_lep) continue;
+        if ( DeltaR(reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi()) < reco_DR_lep) continue;
+        if ( DeltaR(reco_ele.at(1).v.Eta(),reco_ele.at(1).v.Phi(),temp_ele.at(ii).v.Eta(),temp_ele.at(ii).v.Phi()) < reco_DR_lep) continue;
+        reco_ele.push_back( temp_ele.at(ii) );
+	if( debugMode ) std::cout << "IS PASSED --------------------- !!!!!! ----------- so ele size "   << reco_ele.size() << std::endl;
+        break;
+      }
+	if( debugMode ) std::cout << "MU size "   << reco_mu.size() << std::endl;
+	if( debugMode ) std::cout << "ELE size "   << reco_ele.size() << std::endl;
+    
+ //-----
     // Jets
     if( debugMode ) std::cout << ">>>>>> start jets" << std::endl;
     
 
     
     for(unsigned int ii = 0; ii < temp_jets.size(); ++ii)
-    {
+    {  if (reco_jets.size() == 2) break; 
+
+       if( debugMode ) 
+       {
+
+          std::cout << "primo jet Et " << temp_jets.at(ii).v.Et()  <<  std::endl;
+          std::cout << "primo jets candidate eta " << temp_jets.at(ii).v.Eta()  <<  std::endl;
+          std::cout << "DR photon   " << DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi()) <<  std::endl;
+          std::cout << "DR con mu 1 " << DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi())  << std::endl;
+          std::cout << "DR con mu 2  " << DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_ele.at(1).v.Eta(),reco_ele.at(1).v.Phi()) << std::endl;
+	  std::cout << "reco_jets.size()  "   << reco_jets.size() << std::endl;
+        }
       if( temp_jets.at(ii).v.Et() < 30. ) continue;
-      if( fabs(treeVars.jets_eta->at(ii)) > 4.7 ) continue;
+      if( fabs(temp_jets.at(ii).v.Eta()) > 4.7 ) continue;
       
       bool skipJet = false;
       
@@ -1246,38 +1405,76 @@ int main(int argc, char** argv)
         if( DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_ele.at(jj).v.Eta(),reco_ele.at(jj).v.Phi()) < 0.4 ) skipJet = true;
       	}
         if( DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi()) < 0.4 ) continue;
-      
+      	if(reco_mu.size()>0)
+        {
+          if (DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_mu.at(0).v.Eta(),reco_mu.at(0).v.Phi())<0.4 ) skipJet = true;
+    
+        }
       if( skipJet ) continue;
-      reco_jets.push_back(temp_jets.at(ii));
-     }
- 
-     for(unsigned int ii = 0 ; ii < temp_jets.size(); ++ii)
-     {
-      if (reco_jets.size()<1) break;
-      if( temp_jets.at(ii).it < reco_jets.at(0).it  ) continue;
 
-      if( temp_jets.at(ii).v.Et() < 30. ) continue;
-      if( fabs(treeVars.jets_eta->at(ii)) > 4.7 ) continue;
+      if( debugMode ) std::cout << "IS PASSED --------------------- !!!!!! ----------- so jets size "   << reco_jets.size() << std::endl;
+
+   
+       for(unsigned int kk = ii +1 ; kk < temp_jets.size(); ++kk)
+       { 
+         particle dijet;
+	 dijet.v = temp_jets.at(ii).v + temp_jets.at(kk).v;
+        if( debugMode ) 
+        {
+
+          std::cout << "secondo jet Et " << temp_jets.at(kk).v.Et()  <<  std::endl;
+          std::cout << "secondo jets candidate eta " << temp_jets.at(kk).v.Eta()  <<  std::endl;
+          std::cout << "DR photon   " << DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi()) <<  std::endl;
+          std::cout << "DR con mu 1 " << DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_ele.at(0).v.Eta(),reco_ele.at(0).v.Phi())  << std::endl;
+          std::cout << "DR con mu 2  " << DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_ele.at(1).v.Eta(),reco_ele.at(1).v.Phi()) << std::endl;
+	  std::cout << "reco_jets.size()  "   << reco_jets.size() << std::endl;
+          std::cout << "jets delta eta" <<  DeltaEta(temp_jets.at(ii).v.Eta(),temp_jets.at(kk).v.Eta()) <<  std::endl;
+          std::cout << "ZEppenfield   " << (reco_H.v.Eta()-(temp_jets.at(ii).v.Eta()+temp_jets.at(kk).v.Eta())/2.)  << std::endl;
+          std::cout << "dijets mass " << dijet.v.M() << std::endl;
+	  std::cout << "reco_jets.size()  "   <<  DeltaPhi(reco_H.v.Phi(),dijet.v.Phi()) << std::endl;
+        }
+
+        if( temp_jets.at(kk).v.Et() < 30. ) continue;
+        if( fabs(treeVars.jets_eta->at(kk)) > 4.7 ) continue;
       
-      bool skipJet = false;
+        bool skipJet = false;
 
-      for(unsigned int jj = 0; jj < reco_ele.size(); ++jj)
+        for(unsigned int jj = 0; jj < reco_ele.size(); ++jj)
 	{
-        if( DeltaR(temp_jets.at(ii).v.Eta(),temp_jets.at(ii).v.Phi(),reco_ele.at(jj).v.Eta(),reco_ele.at(jj).v.Phi()) < 0.4 ) skipJet = true;
+        if( DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_ele.at(jj).v.Eta(),reco_ele.at(jj).v.Phi()) < 0.4 ) skipJet = true;
       	}
-         if( DeltaEta(reco_jets.at(0).v.Eta(),temp_jets.at(ii).v.Eta()) < 3.5 ) continue;
-         if( (reco_H.v.Eta()-(temp_jets.at(ii).v.Eta()+temp_jets.at(ii).v.Eta())/2 ) < 2.5) continue;
+        if( DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_gamma.at(0).v.Eta(),reco_gamma.at(0).v.Phi()) < 0.4 ) continue;
+	if(reco_mu.size()>0)
+        {
+          if (DeltaR(temp_jets.at(kk).v.Eta(),temp_jets.at(kk).v.Phi(),reco_mu.at(0).v.Eta(),reco_mu.at(0).v.Phi())<0.4 ) skipJet = true;
+    
+        }
 
-	particle dijet;
-	dijet.v = reco_jets.at(0).v + temp_jets.at(ii).v;
+
+        
+         if( fabs(DeltaEta(temp_jets.at(ii).v.Eta(),temp_jets.at(kk).v.Eta())) < 3.5 ) continue;
+        if( (reco_H.v.Eta()-(temp_jets.at(ii).v.Eta()+temp_jets.at(kk).v.Eta())/2.) > 2.5) continue;
+
+	
          if( dijet.v.M() < 500 ) continue;
          if( DeltaPhi(reco_H.v.Phi(),dijet.v.Phi()) < 2.4 ) continue;
+
+        if( skipJet ) continue;
+        reco_jets.push_back(temp_jets.at(ii));
+        reco_jets.push_back(temp_jets.at(kk));
+        if( debugMode ) std::cout << "IS PASSED --------------------- !!!!!! ----------- so jets size "   << reco_jets.size() << std::endl;
+        break;
       
-      if( skipJet ) continue;
-      reco_jets.push_back(temp_jets.at(ii));
-      break;
-      
+        }
       }
+
+
+
+    if( debugMode ) std::cout << ">>>>>> end jets" << std::endl;
+
+
+
+
 // --- categories
 	int cat_n; 
 	bool isCat = false;
@@ -1389,6 +1586,21 @@ if (reco_mu.size() >0 )
       outTree.mu1_isT = treeVars.muons_isTight->at(reco_mu.at(0).it);
       }
 
+      else
+      {
+      outTree.mu1_pt = -100.;
+      outTree.mu1_eta = -100.;
+      outTree.mu1_phi = -100.;
+      outTree.mu1_dxy = -100.;
+      outTree.mu1_dxyPull = -100.;
+      outTree.mu1_dz = -100.;
+      outTree.mu1_dzPull = -100.;
+      outTree.mu1_relIso = -100.;
+      outTree.mu1_isL = -100.;
+      outTree.mu1_isM = -100.;
+      outTree.mu1_isT = -100.;
+       }
+
 
      if (reco_ele.size() >2 )
      {
@@ -1399,25 +1611,32 @@ if (reco_mu.size() >0 )
       //outTree.ele1_dxyPull = fabs(treeVars.electrons_dxy->at(reco_ele.at(0).it))/treeVars.electrons_dxyErr->at(reco_ele.at(0).it);
       //outTree.ele1_dz = treeVars.electrons_dz->at(reco_ele.at(0).it);
       //outTree.ele1_dzPull = fabs(treeVars.electrons_dz->at(reco_ele.at(0).it))/treeVars.electrons_dzErr->at(reco_ele.at(0).it);
+        outTree.ele3_IDMVA = treeVars.electrons_MVAID->at(reco_ele.at(2).it);
       outTree.ele3_full5x5_R9 = treeVars.electrons_full5x5_R9->at(reco_ele.at(2).it);
       outTree.ele3_full5x5_sieie = treeVars.electrons_full5x5_sieie->at(reco_ele.at(2).it);
-      outTree.ele3_IDMVA = treeVars.electrons_MVAID->at(reco_ele.at(2).it);
       }
+      else
+      {
+       outTree.ele3_pt = -100;
+       outTree.ele3_eta = -100;
+       outTree.ele3_phi = -100;
+      //outTree.ele1_dxy = treeVars.electrons_dxy->at(reco_ele.at(0).it);
+      //outTree.ele1_dxyPull = fabs(treeVars.electrons_dxy->at(reco_ele.at(0).it))/treeVars.electrons_dxyErr->at(reco_ele.at(0).it);
+      //outTree.ele1_dz = treeVars.electrons_dz->at(reco_ele.at(0).it);
+      //outTree.ele1_dzPull = fabs(treeVars.electrons_dz->at(reco_ele.at(0).it))/treeVars.electrons_dzErr->at(reco_ele.at(0).it);
+        outTree.ele3_IDMVA = -100;
+      outTree.ele3_full5x5_R9 = -100;
+      outTree.ele3_full5x5_sieie = -100;
 
+       }
 
-     if (reco_jets.size() == 2 )
-     {
-       outTree.jet1_pt = reco_jets.at(0).v.Pt();
-       outTree.jet1_eta = reco_jets.at(0).v.Eta();
-       outTree.jet1_phi = reco_jets.at(0).v.Phi();
-       outTree.jet2_pt = reco_jets.at(1).v.Pt();
-       outTree.jet2_eta = reco_jets.at(1).v.Eta();
-       outTree.jet2_phi = reco_jets.at(1).v.Phi();
-
-      }
-
-
-
+outTree.jet1_pt = (reco_jets.size()==2 ? reco_jets.at(0).v.Pt() : -100);
+outTree.jet1_eta = (reco_jets.size()==2 ? reco_jets.at(0).v.Eta() : -100);
+outTree.jet1_phi = (reco_jets.size()==2 ? reco_jets.at(0).v.Phi() : -100);
+outTree.jet2_pt = (reco_jets.size()==2 ? reco_jets.at(1).v.Pt() : -100);
+outTree.jet2_eta = (reco_jets.size()==2 ? reco_jets.at(1).v.Eta() : -100);
+outTree.jet2_phi = (reco_jets.size()==2 ? reco_jets.at(1).v.Phi() : -100);
+     
 
 
 
@@ -1484,21 +1703,52 @@ if (reco_mu.size() >0 )
     
   } // loop over events
   std::cout << std::endl;
+  std::cout << "NO selection events " << float(no_sel)*mcWeight*35.9 << std::endl;
+  std::cout << "lep selection events " << float(lep_sel)*mcWeight*35.9 << std::endl;
+  std::cout << "Z selection events " << float(Z_sel)*mcWeight*35.9 << std::endl;
+  std::cout << "gamma selection events " << float(gamma_sel)*mcWeight*35.9 << std::endl;
+  std::cout << "H selection events " << float(H_sel)*mcWeight*35.9 << std::endl;
+
   
-  
-  
+  if(doTrigEff)
+  {
   // sort triggers
-  std::sort(vec_triggerPass.begin(),vec_triggerPass.end(),PairSort());
-  for(unsigned int ii = 0; ii < vec_triggerPass.size(); ++ii)
+  std::cout<< std::setw(140) <<"------------  Trigger Eff with only preselections ------------- " << std::endl;
+  std::sort(vec_triggerPass_noCuts.begin(),vec_triggerPass_noCuts.end(),PairSort());
+  for(unsigned int ii = 0; ii < vec_triggerPass_noCuts.size(); ++ii)
   {
     std::cout << std::fixed;
-    std::cout << std::setw(100) << vec_triggerPass.at(ii).first << "   ";
-    std::cout << std::setw(5)  << vec_triggerPass.at(ii).second << "   ";
-    std::cout << std::setw(5)  << 1.*vec_triggerPass.at(ii).second/nEvents_selected << "   ";
+    std::cout << std::setw(100) << vec_triggerPass_noCuts.at(ii).first << "   ";
+    std::cout << std::setw(5)  << vec_triggerPass_noCuts.at(ii).second << "   ";
+    std::cout << std::setw(5)  << 1.*vec_triggerPass_noCuts.at(ii).second/nTriggerEvents_noCuts << "   ";
+    std::cout << std::endl;
+  }
+
+  // sort triggers
+  std::cout<< std::setw(140) <<"------------  Trigger Eff after leptons selections ------------- " << std::endl;
+  std::sort(vec_triggerPass_recoLepSelection.begin(),vec_triggerPass_recoLepSelection.end(),PairSort());
+  for(unsigned int ii = 0; ii < vec_triggerPass_recoLepSelection.size(); ++ii)
+  {
+    std::cout << std::fixed;
+    std::cout << std::setw(100) << vec_triggerPass_recoLepSelection.at(ii).first << "   ";
+    std::cout << std::setw(5)  << vec_triggerPass_recoLepSelection.at(ii).second << "   ";
+    std::cout << std::setw(5)  << 1.*vec_triggerPass_recoLepSelection.at(ii).second/nTriggerEvents_recoLepSelection<< "   ";
+    std::cout << std::endl;
+  }
+
+  // sort triggers
+  std::cout << std::setw(140)<<"------------  Trigger Eff after all selections ------------- " << std::endl;
+  std::sort(vec_triggerPass_AllSelection.begin(),vec_triggerPass_AllSelection.end(),PairSort());
+  for(unsigned int ii = 0; ii < vec_triggerPass_AllSelection.size(); ++ii)
+  {
+    std::cout << std::fixed;
+    std::cout << std::setw(100) << vec_triggerPass_AllSelection.at(ii).first << "   ";
+    std::cout << std::setw(5)  << vec_triggerPass_AllSelection.at(ii).second << "   ";
+    std::cout << std::setw(5)  << 1.*vec_triggerPass_AllSelection.at(ii).second/nTriggerEvents_AllSelection << "   ";
     std::cout << std::endl;
   }
   
-  
+  }
   
   h1_nEvents -> GetXaxis() -> SetBinLabel(1,"tot"); h1_nEvents -> SetBinContent(1,nEvents_tot);
   // h1_nEvents -> GetXaxis() -> SetBinLabel(2,"gen. cut on muons"); h1_nEvents -> SetBinContent(2,nEvents_genCutMu);
